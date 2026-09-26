@@ -1,0 +1,152 @@
+.genesis-splash {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse at 50% 44%, rgb(45 92 145 / 0.17), transparent 43%),
+    radial-gradient(ellipse at 52% 48%, rgb(91 77 146 / 0.07), transparent 58%),
+    linear-gradient(145deg, #050b16 0%, #071426 54%, #0b1728 100%);
+  opacity: 1;
+  transition: opacity 380ms ease;
+}
+
+.genesis-splash--exiting {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.genesis-splash__content {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  padding: 24px;
+  text-align: center;
+  animation: genesis-splash-enter 620ms cubic-bezier(0.2, 0.7, 0.25, 1) both;
+}
+
+.genesis-splash__logo-wrap {
+  position: relative;
+  display: grid;
+  width: min(76vw, 620px);
+  place-items: center;
+  isolation: isolate;
+}
+
+.genesis-splash__glow {
+  position: absolute;
+  z-index: -1;
+  width: 76%;
+  aspect-ratio: 1.9;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, rgb(52 102 165 / 0.18), rgb(68 49 112 / 0.07) 48%, transparent 74%);
+  filter: blur(34px);
+  opacity: 0;
+  animation: genesis-splash-glow 1200ms ease-out 180ms forwards;
+}
+
+.genesis-splash__logo {
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+}
+
+.genesis-splash__loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  color: #a7b6d0;
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  animation: genesis-splash-text 500ms ease-out 180ms both;
+}
+
+.genesis-splash__progress {
+  position: relative;
+  display: block;
+  width: 112px;
+  height: 2px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: rgb(167 182 208 / 0.18);
+}
+
+.genesis-splash__progress::after {
+  position: absolute;
+  inset: 0;
+  content: '';
+  transform: scaleX(0.36);
+  transform-origin: left;
+  background: linear-gradient(90deg, #8bd4d6, #8298c2);
+  animation: genesis-splash-progress 1400ms ease-out both;
+}
+
+@keyframes genesis-splash-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes genesis-splash-glow {
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes genesis-splash-text {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes genesis-splash-progress {
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@media (max-width: 600px) {
+  .genesis-splash__content {
+    gap: 16px;
+  }
+
+  .genesis-splash__logo-wrap {
+    width: 72vw;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .genesis-splash {
+    transition-duration: 220ms;
+  }
+
+  .genesis-splash__content {
+    animation-name: genesis-splash-text;
+    animation-duration: 300ms;
+  }
+
+  .genesis-splash__glow {
+    display: none;
+    animation: none;
+  }
+
+  .genesis-splash__progress::after {
+    animation: none;
+    transform: scaleX(0.55);
+  }
+}
