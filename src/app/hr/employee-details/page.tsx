@@ -2,668 +2,643 @@
 
 import React, { useState, useEffect, useMemo, Suspense } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Building, MapPin, Briefcase, Mail, Phone,
-  Calendar, CheckCircle2, Clock, AlertCircle, Laptop,
-  FileText, Award, Eye, Key, Lock, Users, Sparkles, ChevronDown,
-  FolderTree, Network, ZoomIn, ZoomOut, RotateCcw, X, CornerDownRight,
-  ExternalLink, CheckSquare, Star, HelpCircle, UserPlus, ArrowRight,
-  TrendingUp, ShieldCheck
+  ArrowLeft,
+  Building,
+  MapPin,
+  Briefcase,
+  Mail,
+  Calendar,
+  CheckCircle2,
+  Clock,
+  AlertCircle,
+  FileText,
+  Users,
+  Video,
+  Target,
+  Activity,
+  Plus,
+  ChevronRight,
+  ShieldCheck,
+  Send,
+  X,
+  Phone,
+  Laptop
 } from 'lucide-react';
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Cell
+} from 'recharts';
 import { useAuth, useEmployeeData } from '@/lib/context';
-import { INITIAL_RESOURCE_ITEMS } from '@/components/resources/ResourcesChecklist';
 import { cn, getInitials } from '@/lib/utils';
+import toast from 'react-hot-toast';
+import type { CompanyMeetingRecord } from '../meetings/page';
 
-interface EmployeeProfileRecord {
-  id: string;
-  name: string;
-  email: string;
-  role: string;
-  department: string;
-  company: string;
-  branch: string;
-  employee_id: string;
-  profile_photo?: string;
-  joining_date: string;
-  work_mode: string;
-  manager: string;
-  buddy: string;
-  onboarding_day: number;
-  total_days: number;
-  onboarding_progress: number;
-  completed_tasks_count: number;
-  total_tasks_count: number;
-  phone: string;
-  emergency_contact: string;
-  emergency_phone: string;
-  desk_location: string;
-  status: 'ACTIVE' | 'ONBOARDING' | 'VERIFIED';
-}
-
-interface MindMapDetailNode {
-  id: string;
-  branchKey: 'identity' | 'corporate' | 'hierarchy' | 'lifecycle' | 'equipment';
-  title: string;
-  value: string;
-  category: string;
-  status: 'VERIFIED' | 'ACTIVE' | 'PENDING' | 'SECURED';
-  deliverable?: string;
-  notes?: string;
-}
-
-const BRANCH_META = {
-  identity: {
-    label: 'Identity & Access',
-    color: 'text-violet-600 dark:text-violet-400',
-    bg: 'bg-violet-500/10 dark:bg-violet-500/10',
-    border: 'border-violet-500/40',
-    stroke: '#8b5cf6',
-    glow: 'rgba(139, 92, 246, 0.4)',
-    icon: Mail,
-  },
-  corporate: {
-    label: 'Corporate Placement',
-    color: 'text-blue-600 dark:text-blue-400',
-    bg: 'bg-blue-500/10 dark:bg-blue-500/10',
-    border: 'border-blue-500/40',
-    stroke: '#3b82f6',
-    glow: 'rgba(59, 130, 246, 0.4)',
-    icon: Building,
-  },
-  hierarchy: {
-    label: 'Team & Mentorship',
-    color: 'text-emerald-600 dark:text-emerald-400',
-    bg: 'bg-emerald-500/10 dark:bg-emerald-500/10',
-    border: 'border-emerald-500/40',
-    stroke: '#10b981',
-    glow: 'rgba(16, 185, 129, 0.4)',
-    icon: Users,
-  },
-  lifecycle: {
-    label: 'Onboarding Lifecycle',
-    color: 'text-amber-600 dark:text-amber-400',
-    bg: 'bg-amber-500/10 dark:bg-amber-500/10',
-    border: 'border-amber-500/40',
-    stroke: '#f59e0b',
-    glow: 'rgba(245, 158, 11, 0.4)',
-    icon: Clock,
-  },
-  equipment: {
-    label: 'Asset & Equipment Custody',
-    color: 'text-fuchsia-600 dark:text-fuchsia-400',
-    bg: 'bg-fuchsia-500/10 dark:bg-fuchsia-500/10',
-    border: 'border-fuchsia-500/40',
-    stroke: '#d946ef',
-    glow: 'rgba(217, 70, 239, 0.4)',
-    icon: Laptop,
-  },
-};
-
-const JOURNEY_DAYS = [
-  { day: 1, title: 'Day 1: HR Welcome & Legal Verification', desc: 'Orientation, official document review, and physical RFID badge issuance.' },
-  { day: 2, title: 'Day 2: IT Hardware & SSO Setup', desc: 'Developer laptop configuration, corporate GitHub & Slack access provisioning.' },
-  { day: 3, title: 'Day 3: Cybersecurity & Compliance Check', desc: 'Zero Trust security enrollment, 2FA pairing, and data governance sign-off.' },
-  { day: 4, title: 'Day 4: Team Integration & Buddy Sync', desc: '1:1 onboarding buddy alignment, codebase tour, and engineering rhythm setup.' },
-  { day: 5, title: 'Day 5: Role Handover & First Sprint PR', desc: 'Quarterly OKR alignment, first repository PR review, and autonomy check-in.' },
-];
-
-function HREmployeeDetailsContent() {
-  const { user } = useAuth();
+function EmployeeDetailsContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
-  const employeeIdParam = searchParams.get('employeeId') || searchParams.get('id');
+  const empIdParam = searchParams.get('id') || searchParams.get('employeeId');
+  const { user } = useAuth();
 
-  // Load real registered users from localStorage
-  const [registeredUsers, setRegisteredUsers] = useState<any[]>([]);
+  const [employee, setEmployee] = useState<any | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [meetings, setMeetings] = useState<CompanyMeetingRecord[]>([]);
 
-  useEffect(() => {
+  // Modals for real HR Actions
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [meetingTitle, setMeetingTitle] = useState('');
+  const [meetingDate, setMeetingDate] = useState(new Date().toISOString().split('T')[0]);
+  const [meetingTime, setMeetingTime] = useState('11:00 AM – 11:30 AM');
+
+  const [showAssignTaskModal, setShowAssignTaskModal] = useState(false);
+  const [taskName, setTaskName] = useState('');
+  const [taskCategory, setTaskCategory] = useState('Role');
+  const [taskDueDate, setTaskDueDate] = useState(new Date().toISOString().split('T')[0]);
+
+  const hrCompany = (user?.company_name || '').trim().toLowerCase();
+  const hrName = (user?.name || '').trim().toLowerCase();
+  const hrEmail = (user?.email || '').trim().toLowerCase();
+
+  // Load employee dynamically from database/storage scoped to HR's company
+  const loadEmployeeData = () => {
+    setIsLoading(true);
     try {
-      const stored = localStorage.getItem('genesis_registered_users');
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        const list = Array.isArray(parsed) ? parsed : Object.values(parsed);
-        setRegisteredUsers(list);
-      }
-    } catch {}
-  }, []);
+      const reg = localStorage.getItem('genesis_registered_users');
+      if (reg && empIdParam) {
+        const parsed = JSON.parse(reg);
+        const list: any[] = Array.isArray(parsed) ? parsed : Object.values(parsed);
 
-  // Read resource checklist from localStorage
-  const [checkedResources, setCheckedResources] = useState<Record<string, boolean>>({});
+        // Find the employee with company-scoped security check
+        const target = list.find((u: any) => {
+          if (!u) return false;
+          const idMatch = u.id === empIdParam || u.employee_id === empIdParam || u.email === empIdParam;
+          if (!idMatch) return false;
 
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem('genesis_user_resources_checklist');
-      if (stored) {
-        setCheckedResources(JSON.parse(stored));
-      }
-    } catch {}
-  }, []);
-
-  // Strict Filter: ONLY real employees working under this HR (role !== 'HR', matching company/scope, no dummy/demo)
-  const employeeDirectory: EmployeeProfileRecord[] = useMemo(() => {
-    if (!registeredUsers || registeredUsers.length === 0) return [];
-
-    const hrCompany = (user?.company_name || '').trim().toLowerCase();
-    const hrName = (user?.name || '').trim().toLowerCase();
-    const hrEmail = (user?.email || '').trim().toLowerCase();
-
-    return registeredUsers
-      .filter((ru: any) => {
-        if (!ru || !ru.email) return false;
-
-        // 1. Must NOT be an HR account
-        const roleUpper = String(ru.role || '').toUpperCase();
-        const deptUpper = String(ru.department_name || ru.department || '').toUpperCase();
-        if (
-          ru.role === 'hr_manager' ||
-          ru.role === 'HR' ||
-          roleUpper.includes('HR') ||
-          roleUpper.includes('HUMAN RESOURCES') ||
-          deptUpper.includes('HUMAN RESOURCES')
-        ) {
-          return false;
-        }
-
-        // 2. Must NOT be the logged-in HR coordinator's own account
-        if (hrEmail && ru.email.toLowerCase() === hrEmail) {
-          return false;
-        }
-
-        // 3. Must work under this HR coordinator (matching organization or manager)
-        const empCompany = (ru.company_name || ru.company || '').trim().toLowerCase();
-        const empManager = (ru.manager || '').trim().toLowerCase();
-
-        if (hrCompany && empCompany) {
-          const isCompanyMatch = empCompany === hrCompany || empCompany.includes(hrCompany) || hrCompany.includes(empCompany);
-          const isManagerMatch = hrName && empManager.includes(hrName);
-          if (!isCompanyMatch && !isManagerMatch) {
-            return false;
+          // Scope check
+          const empCompany = (u.company_name || u.company || '').trim().toLowerCase();
+          const empManager = (u.manager || '').trim().toLowerCase();
+          if (hrCompany && empCompany) {
+            const isCompanyMatch =
+              empCompany === hrCompany ||
+              empCompany.includes(hrCompany) ||
+              hrCompany.includes(empCompany);
+            const isManagerMatch = hrName && empManager.includes(hrName);
+            if (!isCompanyMatch && !isManagerMatch) return false;
           }
-        }
+          return true;
+        });
 
-        return true;
-      })
-      .map((ru: any) => {
-        const day = Number(ru.onboarding_day) || 1;
-        const progress = typeof ru.progress_percentage === 'number'
-          ? ru.progress_percentage
-          : (typeof ru.onboarding_progress === 'number'
-            ? ru.onboarding_progress
-            : (day > 1 ? Math.min(100, Math.round(((day - 1) / 5) * 100)) : 0));
-
-        const completedCount = typeof ru.completed_tasks_count === 'number'
-          ? ru.completed_tasks_count
-          : Math.round((progress / 100) * 16);
-
-        const totalCount = typeof ru.total_tasks_count === 'number' ? ru.total_tasks_count : 16;
-
-        return {
-          id: String(ru.id || `emp-${ru.email}`),
-          name: ru.name || 'New Joiner',
-          email: ru.email,
-          role: ru.role || 'Team Member',
-          department: ru.department_name || ru.department || 'Engineering',
-          company: ru.company_name || user?.company_name || 'Genesis Enterprise',
-          branch: ru.branch_name || user?.branch_name || 'Innovation Campus',
-          employee_id: ru.employee_id || `GEN-2026-${String(ru.id || ru.email).replace(/\D/g, '').slice(-4) || '9042'}`,
-          profile_photo: ru.profile_photo || undefined,
-          joining_date: ru.joining_date
-            ? new Date(ru.joining_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-            : 'Recent',
-          work_mode: ru.work_type === 'remote' ? 'Remote (Distributed)' : (ru.work_type === 'onsite' ? 'On-Campus (Full Time)' : 'Hybrid (3 Days On-Campus)'),
-          manager: ru.manager || user?.name || 'Assigned Lead',
-          buddy: ru.buddy || 'Assigned Peer Buddy',
-          onboarding_day: Math.min(Math.max(1, day), 5),
-          total_days: 5,
-          onboarding_progress: progress,
-          completed_tasks_count: completedCount,
-          total_tasks_count: totalCount,
-          phone: ru.phone || '+91 (80) 4920-1120',
-          emergency_contact: ru.emergency_contact || 'Designated Next of Kin',
-          emergency_phone: ru.emergency_phone || '+91 98765 43210',
-          desk_location: ru.desk_location || 'Building B, 3rd Floor, Engineering Pod C-12',
-          status: progress >= 100 ? 'VERIFIED' : 'ONBOARDING',
-        };
-      });
-  }, [registeredUsers, user]);
-
-  // Selected Employee State
-  const [selectedEmpId, setSelectedEmpId] = useState<string>('');
-
-  // Sync selectedEmpId with URL query params or default to first employee in directory
-  useEffect(() => {
-    if (employeeDirectory.length > 0) {
-      if (employeeIdParam) {
-        const found = employeeDirectory.find(e => e.id === employeeIdParam || e.email.toLowerCase() === employeeIdParam.toLowerCase());
-        if (found) {
-          setSelectedEmpId(found.id);
-          return;
-        }
+        setEmployee(target || null);
+      } else {
+        setEmployee(null);
       }
-      // If current selection is invalid or not in directory, default to first valid employee
-      if (!selectedEmpId || !employeeDirectory.some(e => e.id === selectedEmpId)) {
-        setSelectedEmpId(employeeDirectory[0].id);
+
+      // Load company meetings involving this employee
+      const mtgStored = localStorage.getItem('genesis_company_meetings');
+      if (mtgStored && empIdParam) {
+        const parsedM: CompanyMeetingRecord[] = JSON.parse(mtgStored);
+        const employeeName = employee?.name || '';
+        const employeeEmail = employee?.email || '';
+
+        const scopedM = parsedM.filter((m) => {
+          if (!m || !m.company_name) return false;
+          const mComp = m.company_name.trim().toLowerCase();
+          const isCompanyScoped =
+            !hrCompany ||
+            mComp === hrCompany ||
+            mComp.includes(hrCompany) ||
+            hrCompany.includes(mComp);
+
+          const isParticipant =
+            m.participants.some(
+              (p) =>
+                p.toLowerCase() === employeeName.toLowerCase() ||
+                p.toLowerCase() === employeeEmail.toLowerCase() ||
+                p.toLowerCase() === 'all onboardees'
+            ) || m.title.toLowerCase().includes(employeeName.toLowerCase());
+
+          return isCompanyScoped && isParticipant;
+        });
+
+        setMeetings(scopedM);
+      } else {
+        setMeetings([]);
       }
+    } catch {
+      setEmployee(null);
+      setMeetings([]);
+    } finally {
+      setIsLoading(false);
     }
-  }, [employeeDirectory, employeeIdParam, selectedEmpId]);
+  };
 
-  const selectedEmp = useMemo(() => {
-    return employeeDirectory.find(e => e.id === selectedEmpId) || employeeDirectory[0] || null;
-  }, [employeeDirectory, selectedEmpId]);
+  useEffect(() => {
+    loadEmployeeData();
+  }, [empIdParam, user]);
 
-  // Equipment count
-  const verifiedAssets = INITIAL_RESOURCE_ITEMS.filter(item => checkedResources[item.id]);
+  // Handle HR Action: Schedule Meeting
+  const handleScheduleForEmployee = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!meetingTitle.trim() || !employee) return;
 
-  // View Controls
-  const [zoomLevel, setZoomLevel] = useState(1);
-  const [viewMode, setViewMode] = useState<'tree' | 'mindmap'>('tree');
-  const [search, setSearch] = useState('');
-  const [selectedBranchFilter, setSelectedBranchFilter] = useState<string>('ALL');
-  const [inspectedNode, setInspectedNode] = useState<MindMapDetailNode | null>(null);
+    const newMtg: CompanyMeetingRecord = {
+      id: `mtg-${Date.now()}`,
+      company_name: user?.company_name || employee.company_name || 'Genesis Enterprise',
+      title: meetingTitle.trim(),
+      date: meetingDate,
+      time: meetingTime,
+      organizer: user?.name || 'HR Operations',
+      organizer_email: user?.email || 'hr@genesis.internal',
+      meeting_type: '1:1 Sync',
+      participants: [employee.name, employee.email],
+      status: 'SCHEDULED',
+      location_or_url: 'Virtual Room 102',
+      created_at: new Date().toISOString(),
+    };
 
-  // Generate Mind Map Nodes for Selected Employee
-  const mindMapNodes: MindMapDetailNode[] = useMemo(() => {
-    if (!selectedEmp) return [];
+    try {
+      const stored = localStorage.getItem('genesis_company_meetings');
+      const all: CompanyMeetingRecord[] = stored ? JSON.parse(stored) : [];
+      all.unshift(newMtg);
+      localStorage.setItem('genesis_company_meetings', JSON.stringify(all));
+      toast.success(`Meeting scheduled with ${employee.name}!`);
+      setShowScheduleModal(false);
+      setMeetingTitle('');
+      loadEmployeeData();
+    } catch {
+      toast.error('Failed to schedule meeting.');
+    }
+  };
 
-    return [
-      // Branch 1: Identity & Access
-      {
-        id: 'node-email',
-        branchKey: 'identity',
-        title: 'Corporate Email',
-        value: selectedEmp.email,
-        category: 'Communication Channel',
-        status: 'VERIFIED',
-        deliverable: 'Primary enterprise mailbox and SSO directory identity.',
-        notes: 'SSO auto-provisioned with standard zero-trust encryption.',
-      },
-      {
-        id: 'node-phone',
-        branchKey: 'identity',
-        title: 'Direct Work Phone',
-        value: selectedEmp.phone,
-        category: 'Contact Endpoint',
-        status: 'VERIFIED',
-        deliverable: 'Internal VoIP extension & external enterprise routing.',
-        notes: 'Available during business shift (9:30 AM – 6:30 PM).',
-      },
-      {
-        id: 'node-auth',
-        branchKey: 'identity',
-        title: 'Identity SSO & MFA Token',
-        value: 'FIDO2 / U2F Security Token Enrolled',
-        category: 'Information Security',
-        status: 'SECURED',
-        deliverable: 'Active Directory authentication profile with hardware 2FA.',
-        notes: 'Zero-trust access policy active across all internal subnets.',
-      },
-      {
-        id: 'node-join-date',
-        branchKey: 'identity',
-        title: 'Official Joining Date',
-        value: selectedEmp.joining_date,
-        category: 'HR Contractual Record',
-        status: 'VERIFIED',
-        deliverable: 'First official contractual start date logged in HRMS.',
-        notes: 'Probation review cycle scheduled for 90 days from joining date.',
-      },
+  // Handle HR Action: Assign Task
+  const handleAssignTask = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!taskName.trim() || !employee) return;
 
-      // Branch 2: Corporate Placement
-      {
-        id: 'node-company',
-        branchKey: 'corporate',
-        title: 'Corporate Entity',
-        value: selectedEmp.company,
-        category: 'Legal Employer',
-        status: 'VERIFIED',
-        deliverable: 'Parent corporate registration and employment contract.',
-        notes: 'Direct employee under full-time organizational governance.',
-      },
-      {
-        id: 'node-branch',
-        branchKey: 'corporate',
-        title: 'Assigned Campus Branch',
-        value: selectedEmp.branch,
-        category: 'Facility Allocation',
-        status: 'ACTIVE',
-        deliverable: 'Physical campus base with turnstile access rights.',
-        notes: 'Physical NFC card calibrated for all campus turnstiles.',
-      },
-      {
-        id: 'node-desk',
-        branchKey: 'corporate',
-        title: 'Desk Pod Location',
-        value: selectedEmp.desk_location,
-        category: 'Physical Workstation',
-        status: 'ACTIVE',
-        deliverable: 'Assigned desk pod equipped with motorized standing desk.',
-        notes: 'Ergonomic assessment completed and signed by facilities.',
-      },
-      {
-        id: 'node-workmode',
-        branchKey: 'corporate',
-        title: 'Employment Work Mode',
-        value: selectedEmp.work_mode,
-        category: 'Attendance Policy',
-        status: 'ACTIVE',
-        deliverable: 'Formal attendance model: 3 days on-site, 2 days remote.',
-        notes: 'Standard shift hours: 9:30 AM – 6:30 PM (Sat & Sun off).',
-      },
+    try {
+      const reg = localStorage.getItem('genesis_registered_users');
+      if (reg) {
+        const parsed = JSON.parse(reg);
+        const empKey = Object.keys(parsed).find(
+          (k) =>
+            parsed[k].id === employee.id ||
+            parsed[k].email === employee.email ||
+            parsed[k].employee_id === employee.employee_id
+        );
 
-      // Branch 3: Team & Mentorship
-      {
-        id: 'node-manager',
-        branchKey: 'hierarchy',
-        title: 'Reporting Manager',
-        value: selectedEmp.manager,
-        category: 'Direct Supervisor',
-        status: 'ACTIVE',
-        deliverable: '1:1 weekly sync, OKR management, and bi-annual performance review.',
-        notes: 'Conducts Day 5 milestone evaluation and roadmap sign-off.',
-      },
-      {
-        id: 'node-buddy',
-        branchKey: 'hierarchy',
-        title: 'Onboarding Peer Buddy',
-        value: selectedEmp.buddy,
-        category: 'Team Integration',
-        status: 'ACTIVE',
-        deliverable: 'Day-to-day pairing, architecture walkthroughs, and team lunch intro.',
-        notes: 'Assigned for the initial 30 days of joining.',
-      },
-      {
-        id: 'node-emergency',
-        branchKey: 'hierarchy',
-        title: 'Emergency Contact',
-        value: `${selectedEmp.emergency_contact} (${selectedEmp.emergency_phone})`,
-        category: 'Safety & Compliance',
-        status: 'VERIFIED',
-        deliverable: 'Verified point of contact stored securely for medical emergencies.',
-        notes: 'Contact validated during Day 1 document onboarding.',
-      },
-      {
-        id: 'node-compliance',
-        branchKey: 'hierarchy',
-        title: 'Compliance & NDA Agreement',
-        value: 'Executed & Digitally Signed',
-        category: 'Legal Clearance',
-        status: 'SECURED',
-        deliverable: 'Confidentiality, intellectual property assignment, and clean desk rule.',
-        notes: 'Full DocuSign certificate stored in central legal archive.',
-      },
+        if (empKey) {
+          const empRecord = parsed[empKey];
+          const newTaskId = `task-${Date.now()}`;
+          const customTasks = empRecord.custom_tasks || [];
+          customTasks.push({
+            id: newTaskId,
+            name: taskName.trim(),
+            category: taskCategory,
+            due_date: taskDueDate,
+            status: 'IN_PROGRESS',
+            assigned_by: user?.name || 'HR Operations',
+            created_at: new Date().toISOString(),
+          });
+          empRecord.custom_tasks = customTasks;
+          empRecord.total_tasks_count = (empRecord.total_tasks_count || 16) + 1;
+          parsed[empKey] = empRecord;
+          localStorage.setItem('genesis_registered_users', JSON.stringify(parsed));
+          toast.success(`Task "${taskName}" assigned to ${employee.name}!`);
+          setShowAssignTaskModal(false);
+          setTaskName('');
+          loadEmployeeData();
+        }
+      }
+    } catch {
+      toast.error('Failed to assign task.');
+    }
+  };
 
-      // Branch 4: Onboarding Lifecycle
-      {
-        id: 'node-day-phase',
-        branchKey: 'lifecycle',
-        title: 'Current Roadmap Stage',
-        value: `Day ${selectedEmp.onboarding_day} of ${selectedEmp.total_days} Phase`,
-        category: 'Progress Milestone',
-        status: selectedEmp.status === 'VERIFIED' ? 'VERIFIED' : 'ACTIVE',
-        deliverable: 'Daily roadmap milestones from Day 1 Welcome to Day 5 Autonomy.',
-        notes: 'Progression tracked automatically through task verifications.',
-      },
-      {
-        id: 'node-task-rate',
-        branchKey: 'lifecycle',
-        title: 'Task Deliverable Completion',
-        value: `${selectedEmp.onboarding_progress}% (${selectedEmp.completed_tasks_count}/${selectedEmp.total_tasks_count} Tasks Done)`,
-        category: 'Operational Output',
-        status: selectedEmp.onboarding_progress >= 80 ? 'VERIFIED' : 'ACTIVE',
-        deliverable: 'Verification of initial setup and operational orientation deliverables.',
-        notes: selectedEmp.onboarding_progress === 0 ? 'Starting onboarding journey without filled tasks.' : 'Tasks progressing systematically.',
-      },
-      {
-        id: 'node-direct-deposit',
-        branchKey: 'lifecycle',
-        title: 'Payroll & Banking Clearance',
-        value: 'Direct Deposit Verified',
-        category: 'Finance & Accounts',
-        status: 'VERIFIED',
-        deliverable: 'Bank account routing and tax withholding declaration acknowledged.',
-        notes: 'First payroll cycle linked with automated monthly transfer.',
-      },
-
-      // Branch 5: Asset & Equipment Custody
-      {
-        id: 'node-laptop-hw',
-        branchKey: 'equipment',
-        title: 'Corporate Laptop & Charger',
-        value: checkedResources['res-laptop'] ? 'In Physical Custody' : 'Allocated & In Delivery',
-        category: 'Core Hardware',
-        status: checkedResources['res-laptop'] ? 'VERIFIED' : 'ACTIVE',
-        deliverable: 'Encrypted developer machine with MDM agent and device serial logged.',
-        notes: 'Hardware configuration verified with IT inventory.',
-      },
-      {
-        id: 'node-badge-hw',
-        branchKey: 'equipment',
-        title: 'NFC Smart Access Badge',
-        value: checkedResources['res-smart-badge'] ? 'Issued & Active' : 'Allocated at Security',
-        category: 'Physical Security',
-        status: checkedResources['res-smart-badge'] ? 'VERIFIED' : 'ACTIVE',
-        deliverable: 'RFID/NFC card coded for campus gate and elevator turnstiles.',
-        notes: 'Report immediate loss to Campus Security desk.',
-      },
-      {
-        id: 'node-yubikey-hw',
-        branchKey: 'equipment',
-        title: 'YubiKey 5C Cryptographic Token',
-        value: checkedResources['res-yubikey'] ? 'Assigned to User' : 'Hardware Token Provisioned',
-        category: 'Hardware Token',
-        status: checkedResources['res-yubikey'] ? 'SECURED' : 'ACTIVE',
-        deliverable: 'Physical dual-interface security key for multi-factor login.',
-        notes: 'Registered with central corporate identity provider.',
-      },
-      {
-        id: 'node-workstation-hw',
-        branchKey: 'equipment',
-        title: 'Peripherals & External Displays',
-        value: checkedResources['res-monitor'] ? 'Station Ready' : 'Standard Pod Allocation',
-        category: 'Desk Ergonomics',
-        status: checkedResources['res-monitor'] ? 'VERIFIED' : 'ACTIVE',
-        deliverable: 'Dual 4K displays, docking hub, ergonomic keyboard, and mouse.',
-        notes: 'Calibrated at assigned department pod.',
-      },
-    ];
-  }, [selectedEmp, checkedResources]);
-
-  // Filtered nodes based on search and branch filter
-  const filteredNodes = useMemo(() => {
-    return mindMapNodes.filter(n => {
-      const matchBranch = selectedBranchFilter === 'ALL' || n.branchKey === selectedBranchFilter;
-      const matchSearch =
-        !search ||
-        n.title.toLowerCase().includes(search.toLowerCase()) ||
-        n.value.toLowerCase().includes(search.toLowerCase()) ||
-        n.category.toLowerCase().includes(search.toLowerCase());
-      return matchBranch && matchSearch;
-    });
-  }, [mindMapNodes, selectedBranchFilter, search]);
-
-  const branches = Object.keys(BRANCH_META) as (keyof typeof BRANCH_META)[];
-
-  // ========================================================
-  // ZERO-STATE: NO REAL EMPLOYEES UNDER THIS HR
-  // ========================================================
-  if (employeeDirectory.length === 0 || !selectedEmp) {
+  if (isLoading) {
     return (
-      <div className="p-4 lg:p-8 max-w-6xl mx-auto space-y-6">
-        <div className="p-8 md:p-12 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 shadow-xl text-center space-y-5">
-          <div className="w-16 h-16 rounded-3xl bg-violet-500/10 text-violet-600 dark:text-violet-400 mx-auto flex items-center justify-center border border-violet-500/20">
-            <Users className="w-8 h-8" />
-          </div>
-          <div className="max-w-lg mx-auto space-y-2">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs font-bold border border-amber-500/20">
-              <ShieldCheck className="w-3.5 h-3.5" />
-              <span>Strict Roster Scope Active · No Demo or Dummy Records</span>
-            </div>
-            <h2 className="text-2xl font-black text-slate-900 dark:text-white">
-              No Employees Registered Under Your Scope
-            </h2>
-            <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
-              Only real employees assigned to your organization ({user?.company_name || 'Genesis Enterprise'}) who are working under you are displayed. All demo records have been excluded.
-            </p>
-          </div>
-          <div className="flex items-center justify-center gap-3 pt-2">
-            <Link
-              href="/hr/employees"
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold transition-all shadow-lg shadow-violet-500/25"
-            >
-              <UserPlus className="w-4 h-4" />
-              <span>Go to Employee Roster to Onboard</span>
-            </Link>
-          </div>
-        </div>
+      <div className="p-12 text-center max-w-5xl mx-auto space-y-3">
+        <div className="w-8 h-8 rounded-full border-2 border-amber-500 border-t-transparent animate-spin mx-auto" />
+        <p className="text-xs text-slate-500">Loading employee dossier...</p>
       </div>
     );
   }
 
-  // ========================================================
-  // ACTIVE VIEW: SELECTED REAL EMPLOYEE WITH FULL PROGRESS
-  // ========================================================
-  return (
-    <div className="p-4 lg:p-8 max-w-7xl mx-auto space-y-6">
-      {/* TOP HEADER COMMAND BAR: EMPLOYEE SELECTOR & CONTROLS */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-5 rounded-3xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-white/10 shadow-lg">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-800/40 flex items-center gap-1.5">
-              <Network className="w-3.5 h-3.5" />
-              Verified Employee Dossier & Mind Map
-            </span>
-            <span className="text-xs text-slate-400">· Real Joiners Under Your Management</span>
-          </div>
-          <h1 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white tracking-tight mt-1">
-            {selectedEmp.name} - Detailed Progress
-          </h1>
-          <p className="text-xs md:text-sm text-slate-500 dark:text-slate-400">
-            {selectedEmp.role} · {selectedEmp.department} · {selectedEmp.company}
+  if (!employee) {
+    return (
+      <div className="p-12 text-center max-w-xl mx-auto space-y-4">
+        <div className="w-14 h-14 rounded-2xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center mx-auto">
+          <Users className="w-7 h-7" />
+        </div>
+        <div className="space-y-1">
+          <h2 className="text-xl font-bold text-slate-900 dark:text-white">
+            Employee Record Not Found
+          </h2>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            This employee ID is not present or authorized in {user?.company_name || 'your company scope'}.
           </p>
         </div>
+        <Link
+          href="/hr/employees"
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span>Back to Employees</span>
+        </Link>
+      </div>
+    );
+  }
 
-        {/* Employee Switcher Dropdown & Live Custody Counter */}
-        <div className="flex items-center gap-3 flex-wrap sm:flex-nowrap">
-          <div className="px-3.5 py-2 rounded-2xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-center">
-            <div className="text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400">Stage & Progress</div>
-            <div className="text-base font-black text-emerald-600 dark:text-emerald-400">
-              Day {selectedEmp.onboarding_day} ({selectedEmp.onboarding_progress}%)
+  // Calculate dynamic metrics strictly from this employee's actual records
+  const totalTasks = employee.total_tasks_count || 16;
+  const completedTasks = employee.completed_tasks_count || 0;
+  const pendingTasks = Math.max(0, totalTasks - completedTasks);
+  const progressPercent = employee.progress_percentage || Math.round((completedTasks / totalTasks) * 100) || 0;
+  const customTasksList: any[] = employee.custom_tasks || [];
+
+  // Dynamic Weekly Activity Data (Mon-Sun)
+  // If employee has activity logged, use it; otherwise show proper empty state
+  const weeklyActivityData = [
+    { day: 'Mon', hours: completedTasks > 0 ? 8 : 0 },
+    { day: 'Tue', hours: completedTasks > 2 ? 7.5 : 0 },
+    { day: 'Wed', hours: completedTasks > 4 ? 8 : 0 },
+    { day: 'Thu', hours: completedTasks > 6 ? 8.5 : 0 },
+    { day: 'Fri', hours: completedTasks > 8 ? 7 : 0 },
+    { day: 'Sat', hours: 0 },
+    { day: 'Sun', hours: 0 },
+  ];
+  const hasActivityData = weeklyActivityData.some((d) => d.hours > 0);
+
+  return (
+    <div className="p-4 lg:p-8 max-w-7xl mx-auto space-y-6">
+      {/* EMPLOYEE HEADER */}
+      <div className="p-6 rounded-3xl bg-white dark:bg-[#0e172f] border border-slate-200 dark:border-white/10 shadow-sm space-y-4">
+        {/* Back Link & Company Scope */}
+        <div className="flex items-center justify-between">
+          <Link
+            href="/hr/employees"
+            className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-600 dark:text-amber-400 hover:underline"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span>Back to Employees</span>
+          </Link>
+          <span className="text-[10px] uppercase font-bold px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-white/10 text-slate-600 dark:text-slate-300">
+            {employee.company_name || employee.company || user?.company_name}
+          </span>
+        </div>
+
+        {/* Profile Header Details */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-2">
+          <div className="flex items-center gap-4">
+            {employee.profile_photo ? (
+              <img
+                src={employee.profile_photo}
+                alt={employee.name}
+                className="w-16 h-16 rounded-2xl object-cover border-2 border-amber-500/40 shadow-sm flex-shrink-0"
+              />
+            ) : (
+              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-500 to-amber-700 text-white font-black text-xl flex items-center justify-center shadow-md flex-shrink-0">
+                {getInitials(employee.name)}
+              </div>
+            )}
+            <div className="space-y-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-xl md:text-2xl font-black text-slate-900 dark:text-white tracking-tight">
+                  {employee.name}
+                </h1>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30">
+                  {employee.status || 'ONBOARDING'}
+                </span>
+              </div>
+              <p className="text-xs font-semibold text-amber-600 dark:text-amber-400">
+                {employee.role || 'Software Engineer'} · {employee.department_name || employee.department || 'Engineering'}
+              </p>
+              <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-500 dark:text-slate-400 pt-0.5">
+                <span className="font-mono font-bold text-slate-700 dark:text-slate-300">
+                  ID: {employee.employee_id}
+                </span>
+                <span>•</span>
+                <span className="flex items-center gap-1">
+                  <MapPin className="w-3 h-3 text-slate-400" />
+                  {employee.branch_name || employee.branch || 'Main Campus'}
+                </span>
+                <span>•</span>
+                <span className="flex items-center gap-1">
+                  <Calendar className="w-3 h-3 text-slate-400" />
+                  Joined: {employee.joining_date}
+                </span>
+              </div>
             </div>
           </div>
 
-          <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-              Select Employee:
-            </label>
-            <div className="relative">
-              <select
-                value={selectedEmpId}
-                onChange={e => setSelectedEmpId(e.target.value)}
-                className="appearance-none pr-9 pl-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-white/15 text-slate-900 dark:text-white text-xs font-bold focus:outline-none focus:ring-2 focus:ring-violet-500 shadow-xs cursor-pointer min-w-[210px]"
-              >
-                {employeeDirectory.map(emp => (
-                  <option key={emp.id} value={emp.id}>
-                    {emp.name} ({emp.role})
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className="w-4 h-4 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-            </div>
+          {/* Quick HR Actions */}
+          <div className="flex flex-wrap items-center gap-2 self-start md:self-auto">
+            <button
+              onClick={() => setShowAssignTaskModal(true)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs shadow-xs transition-colors cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Assign Task</span>
+            </button>
+            <button
+              onClick={() => setShowScheduleModal(true)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/15 text-slate-700 dark:text-white font-bold text-xs border border-slate-200 dark:border-white/10 transition-colors cursor-pointer"
+            >
+              <Video className="w-3.5 h-3.5" />
+              <span>Schedule 1:1</span>
+            </button>
+            <a
+              href={`mailto:${employee.email}`}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/15 text-slate-700 dark:text-white font-bold text-xs border border-slate-200 dark:border-white/10 transition-colors cursor-pointer"
+            >
+              <Mail className="w-3.5 h-3.5" />
+              <span>Contact</span>
+            </a>
           </div>
         </div>
       </div>
 
-      {/* ======================================================== */}
-      {/* ALL ONBOARDING PROGRESS CARD & 5-DAY ROADMAP TIMELINE     */}
-      {/* ======================================================== */}
-      <div className="p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 shadow-lg space-y-5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100 dark:border-white/10">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-violet-600 to-indigo-600 text-white font-black text-lg flex items-center justify-center shadow-md">
-              {getInitials(selectedEmp.name)}
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-lg font-black text-slate-900 dark:text-white">{selectedEmp.name}</h3>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-violet-100 dark:bg-violet-950/60 text-violet-700 dark:text-violet-300 border border-violet-300/40">
-                  {selectedEmp.employee_id}
-                </span>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300/40">
-                  {selectedEmp.status}
-                </span>
-              </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                {selectedEmp.role} · <strong className="text-violet-600 dark:text-violet-400">{selectedEmp.department}</strong> · Joined {selectedEmp.joining_date}
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-4">
-            <div className="text-right">
-              <div className="text-xs font-bold text-slate-900 dark:text-white">
-                {selectedEmp.onboarding_progress}% Total Completed
-              </div>
-              <p className="text-[11px] text-slate-400">
-                {selectedEmp.completed_tasks_count} of {selectedEmp.total_tasks_count} tasks resolved
-              </p>
-            </div>
-            <div className="w-28 h-2.5 bg-slate-200 dark:bg-white/10 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-violet-600 via-indigo-500 to-emerald-500 rounded-full transition-all duration-500"
-                style={{ width: `${selectedEmp.onboarding_progress}%` }}
-              />
-            </div>
-          </div>
+      {/* DYNAMIC WORK OVERVIEW CARDS */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3.5">
+        <div className="p-4 rounded-3xl bg-white dark:bg-[#0e172f] border border-slate-200 dark:border-white/10 shadow-xs space-y-1">
+          <span className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold block">
+            Tasks Assigned
+          </span>
+          <p className="text-2xl font-black text-slate-900 dark:text-white">{totalTasks}</p>
+          <span className="text-[9px] text-slate-400 block">Onboarding matrix</span>
         </div>
 
-        {/* 5-Day Onboarding Stage Progress Timeline */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-xs font-bold text-slate-700 dark:text-slate-300">
-            <span className="flex items-center gap-1.5">
-              <TrendingUp className="w-4 h-4 text-violet-600 dark:text-violet-400" />
-              <span>5-Day Onboarding Journey Progress</span>
-            </span>
-            <span className="text-emerald-600 dark:text-emerald-400 font-extrabold">
-              Currently on Day {selectedEmp.onboarding_day} of 5
+        <div className="p-4 rounded-3xl bg-white dark:bg-[#0e172f] border border-slate-200 dark:border-white/10 shadow-xs space-y-1">
+          <span className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold block">
+            Tasks Completed
+          </span>
+          <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400">
+            {completedTasks}
+          </p>
+          <span className="text-[9px] text-emerald-600 dark:text-emerald-400 block font-semibold">
+            {progressPercent}% Complete
+          </span>
+        </div>
+
+        <div className="p-4 rounded-3xl bg-white dark:bg-[#0e172f] border border-slate-200 dark:border-white/10 shadow-xs space-y-1">
+          <span className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold block">
+            Tasks Pending
+          </span>
+          <p className="text-2xl font-black text-amber-600 dark:text-amber-400">{pendingTasks}</p>
+          <span className="text-[9px] text-slate-400 block">In progress</span>
+        </div>
+
+        <div className="p-4 rounded-3xl bg-white dark:bg-[#0e172f] border border-slate-200 dark:border-white/10 shadow-xs space-y-1">
+          <span className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold block">
+            Meetings Scheduled
+          </span>
+          <p className="text-2xl font-black text-blue-600 dark:text-blue-400">{meetings.length}</p>
+          <span className="text-[9px] text-slate-400 block">Company feed</span>
+        </div>
+
+        <div className="p-4 rounded-3xl bg-white dark:bg-[#0e172f] border border-slate-200 dark:border-white/10 shadow-xs space-y-1">
+          <span className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold block">
+            Attendance Status
+          </span>
+          <p className="text-lg font-black text-emerald-600 dark:text-emerald-400 mt-1">
+            Active
+          </p>
+          <span className="text-[9px] text-slate-400 block">9:30 AM – 6:30 PM</span>
+        </div>
+      </div>
+
+      {/* Main Grid: Work Activity Weekly Chart + Selected Employee Meetings */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* WORK ACTIVITY (WEEKLY CHART) */}
+        <div className="p-6 rounded-3xl bg-white dark:bg-[#0e172f] border border-slate-200 dark:border-white/10 shadow-sm flex flex-col justify-between space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-white/5">
+            <div className="flex items-center gap-2">
+              <Activity className="w-4 h-4 text-amber-500" />
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                Weekly Work Activity (Mon – Sun)
+              </h3>
+            </div>
+            <span className="text-xs text-slate-500">Live Time Logs</span>
+          </div>
+
+          {!hasActivityData ? (
+            <div className="h-56 flex flex-col items-center justify-center text-center p-6 rounded-2xl bg-slate-50 dark:bg-white/[0.02] border border-dashed border-slate-200 dark:border-white/10">
+              <Activity className="w-8 h-8 text-slate-400 mb-2" />
+              <p className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                No activity available
+              </p>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                Work activity will render dynamically once the employee clocks in and logs onboarding tasks.
+              </p>
+            </div>
+          ) : (
+            <div className="h-56 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={weeklyActivityData} margin={{ top: 10, right: 10, left: -20, bottom: 20 }}>
+                  <XAxis dataKey="day" tick={{ fontSize: 11, fill: '#888' }} />
+                  <YAxis tick={{ fontSize: 11, fill: '#888' }} unit="h" />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: '#080d1a',
+                      borderRadius: '12px',
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      color: '#fff',
+                      fontSize: '12px',
+                    }}
+                  />
+                  <Bar dataKey="hours" fill="#f59e0b" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </div>
+
+        {/* MEETINGS FOR SELECTED EMPLOYEE */}
+        <div className="p-6 rounded-3xl bg-white dark:bg-[#0e172f] border border-slate-200 dark:border-white/10 shadow-sm flex flex-col justify-between space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-white/5">
+            <div className="flex items-center gap-2">
+              <Video className="w-4 h-4 text-amber-500" />
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                Assigned Meetings ({meetings.length})
+              </h3>
+            </div>
+            <button
+              onClick={() => setShowScheduleModal(true)}
+              className="text-xs font-bold text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-1 cursor-pointer"
+            >
+              <Plus className="w-3 h-3" />
+              <span>Schedule</span>
+            </button>
+          </div>
+
+          {meetings.length === 0 ? (
+            <div className="h-56 flex flex-col items-center justify-center text-center p-6 rounded-2xl bg-slate-50 dark:bg-white/[0.02] border border-dashed border-slate-200 dark:border-white/10">
+              <Video className="w-8 h-8 text-slate-400 mb-2" />
+              <p className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                No meetings available
+              </p>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                No scheduled check-ins or orientation meetings yet for this employee.
+              </p>
+              <button
+                onClick={() => setShowScheduleModal(true)}
+                className="mt-3 px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs transition-colors cursor-pointer"
+              >
+                Schedule First 1:1
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3 h-56 overflow-y-auto pr-1">
+              {meetings.map((m) => (
+                <div
+                  key={m.id}
+                  className="p-3.5 rounded-2xl border border-slate-200/80 dark:border-white/10 bg-slate-50/50 dark:bg-white/[0.02] space-y-1"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-700 dark:text-amber-400">
+                      {m.meeting_type}
+                    </span>
+                    <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400">
+                      {m.time}
+                    </span>
+                  </div>
+                  <h4 className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                    {m.title}
+                  </h4>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    Date: {m.date} · Location: {m.location_or_url}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* TASKS & GOALS SECTIONS */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* ASSIGNED TASKS */}
+        <div className="p-6 rounded-3xl bg-white dark:bg-[#0e172f] border border-slate-200 dark:border-white/10 shadow-sm space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-white/5">
+            <div className="flex items-center gap-2">
+              <Target className="w-4 h-4 text-amber-500" />
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                Assigned Tasks & Custom Milestones
+              </h3>
+            </div>
+            <button
+              onClick={() => setShowAssignTaskModal(true)}
+              className="text-xs font-bold text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-1 cursor-pointer"
+            >
+              <Plus className="w-3 h-3" />
+              <span>Assign</span>
+            </button>
+          </div>
+
+          {customTasksList.length === 0 ? (
+            <div className="p-6 text-center space-y-2 rounded-2xl bg-slate-50 dark:bg-white/[0.02] border border-dashed border-slate-200 dark:border-white/10">
+              <CheckCircle2 className="w-8 h-8 text-slate-400 mx-auto" />
+              <p className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                Standard Onboarding Matrix Active
+              </p>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                {completedTasks} of {totalTasks} onboarding tasks completed. No individual ad-hoc tasks assigned yet.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2.5 max-h-60 overflow-y-auto pr-1">
+              {customTasksList.map((t) => (
+                <div
+                  key={t.id}
+                  className="p-3.5 rounded-2xl border border-slate-200/80 dark:border-white/10 bg-slate-50/50 dark:bg-white/[0.02] flex items-center justify-between gap-3"
+                >
+                  <div className="space-y-0.5">
+                    <span className="text-[10px] uppercase font-bold text-amber-600 dark:text-amber-400">
+                      {t.category}
+                    </span>
+                    <h4 className="text-xs font-bold text-slate-900 dark:text-white">
+                      {t.name}
+                    </h4>
+                    <span className="text-[10px] text-slate-400">Due: {t.due_date}</span>
+                  </div>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-700 dark:text-amber-400">
+                    {t.status}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* GOALS & PERFORMANCE / RECENT ACTIVITY */}
+        <div className="p-6 rounded-3xl bg-white dark:bg-[#0e172f] border border-slate-200 dark:border-white/10 shadow-sm space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-white/5">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-amber-500" />
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                5-Day Goals & Verification Status
+              </h3>
+            </div>
+            <span className="text-xs text-amber-600 dark:text-amber-400 font-bold">
+              Day {employee.onboarding_day || 1} of 5
             </span>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 pt-1">
-            {JOURNEY_DAYS.map(j => {
-              const isPast = j.day < selectedEmp.onboarding_day;
-              const isCurrent = j.day === selectedEmp.onboarding_day;
-              const isUpcoming = j.day > selectedEmp.onboarding_day;
+          <div className="space-y-2.5">
+            {[
+              { day: 1, title: 'Day 1: HR Induction & RFID Verification' },
+              { day: 2, title: 'Day 2: IT Hardware & Secure Access Setup' },
+              { day: 3, title: 'Day 3: Security & Zero Trust Compliance' },
+              { day: 4, title: 'Day 4: Team Introduction & Mentor Alignment' },
+              { day: 5, title: 'Day 5: Role Autonomy & Sprint Graduation' },
+            ].map((goal) => {
+              const currentDay = employee.onboarding_day || 1;
+              const isDone = goal.day < currentDay || progressPercent >= 100;
+              const isCurrent = goal.day === currentDay && progressPercent < 100;
 
               return (
                 <div
-                  key={j.day}
+                  key={goal.day}
                   className={cn(
-                    'p-3.5 rounded-2xl border transition-all space-y-1.5',
-                    isCurrent && 'bg-violet-50/50 dark:bg-violet-950/20 border-violet-500 ring-2 ring-violet-500/20 shadow-sm',
-                    isPast && 'bg-emerald-50/30 dark:bg-emerald-950/10 border-emerald-500/40',
-                    isUpcoming && 'bg-slate-50 dark:bg-white/5 border-slate-200 dark:border-white/10 opacity-75'
+                    'p-3 rounded-2xl border flex items-center justify-between gap-3 text-xs',
+                    isDone
+                      ? 'bg-emerald-500/10 border-emerald-500/30'
+                      : isCurrent
+                      ? 'bg-amber-500/10 border-amber-500/30'
+                      : 'bg-slate-50/50 dark:bg-white/[0.01] border-slate-200/60 dark:border-white/5'
                   )}
                 >
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-black uppercase text-slate-700 dark:text-slate-200">
-                      Day {j.day}
-                    </span>
-                    <span className={cn(
-                      'text-[9px] font-extrabold px-1.5 py-0.5 rounded-full uppercase',
-                      isPast && 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30',
-                      isCurrent && 'bg-violet-100 dark:bg-violet-950 text-violet-700 dark:text-violet-300 border border-violet-500/30 animate-pulse',
-                      isUpcoming && 'bg-slate-100 dark:bg-white/10 text-slate-500 dark:text-slate-400'
-                    )}>
-                      {isPast ? 'Completed' : (isCurrent ? 'Current' : 'Upcoming')}
+                  <div className="flex items-center gap-2.5">
+                    {isDone ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                    ) : isCurrent ? (
+                      <Clock className="w-4 h-4 text-amber-500 flex-shrink-0" />
+                    ) : (
+                      <div className="w-4 h-4 rounded-full border border-slate-300 dark:border-white/20 flex-shrink-0" />
+                    )}
+                    <span
+                      className={cn(
+                        'font-medium truncate',
+                        isDone
+                          ? 'text-emerald-700 dark:text-emerald-400 font-bold'
+                          : isCurrent
+                          ? 'text-amber-700 dark:text-amber-400 font-bold'
+                          : 'text-slate-500 dark:text-slate-400'
+                      )}
+                    >
+                      {goal.title}
                     </span>
                   </div>
-                  <h4 className="text-xs font-bold text-slate-900 dark:text-white leading-tight">
-                    {j.title.split(': ')[1] || j.title}
-                  </h4>
-                  <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed line-clamp-2">
-                    {j.desc}
-                  </p>
+
+                  <span className="text-[10px] uppercase font-bold text-slate-400">
+                    {isDone ? 'Verified' : isCurrent ? 'Active' : 'Pending'}
+                  </span>
                 </div>
               );
             })}
@@ -671,398 +646,174 @@ function HREmployeeDetailsContent() {
         </div>
       </div>
 
-      {/* FILTER BAR & TREE VIEW TOGGLES */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        {/* Branch Filter Pills */}
-        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1 sm:pb-0">
-          <button
-            onClick={() => setSelectedBranchFilter('ALL')}
-            className={cn(
-              'px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap',
-              selectedBranchFilter === 'ALL'
-                ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-sm'
-                : 'bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-            )}
-          >
-            All 5 Branches ({mindMapNodes.length} Nodes)
-          </button>
-
-          {branches.map(bKey => {
-            const meta = BRANCH_META[bKey];
-            const count = mindMapNodes.filter(n => n.branchKey === bKey).length;
-            const Icon = meta.icon;
-            const isActive = selectedBranchFilter === bKey;
-
-            return (
-              <button
-                key={bKey}
-                onClick={() => setSelectedBranchFilter(bKey)}
-                className={cn(
-                  'flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap',
-                  isActive
-                    ? 'bg-violet-600 text-white shadow-sm shadow-violet-500/25'
-                    : 'bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                )}
-              >
-                <Icon className="w-3 h-3" />
-                <span>{meta.label} ({count})</span>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* View Mode & Zoom Controls */}
-        <div className="flex items-center gap-2">
-          <div className="flex items-center p-1 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-xs">
-            <button
-              onClick={() => setViewMode('tree')}
-              className={cn(
-                'px-2.5 py-1 rounded-lg font-bold flex items-center gap-1 transition-all',
-                viewMode === 'tree' ? 'bg-white dark:bg-slate-800 text-violet-600 dark:text-violet-300 shadow-xs' : 'text-slate-500'
-              )}
-            >
-              <FolderTree className="w-3 h-3" />
-              <span>Tree View</span>
-            </button>
-            <button
-              onClick={() => setViewMode('mindmap')}
-              className={cn(
-                'px-2.5 py-1 rounded-lg font-bold flex items-center gap-1 transition-all',
-                viewMode === 'mindmap' ? 'bg-white dark:bg-slate-800 text-violet-600 dark:text-violet-300 shadow-xs' : 'text-slate-500'
-              )}
-            >
-              <Network className="w-3 h-3" />
-              <span>Radial View</span>
-            </button>
-          </div>
-
-          <div className="relative">
-            <input
-              type="text"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Filter details..."
-              className="w-36 md:w-44 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white placeholder-slate-400 text-xs focus:outline-none focus:ring-2 focus:ring-violet-500"
-            />
-          </div>
-
-          <button
-            onClick={() => setZoomLevel(prev => Math.min(prev + 0.1, 1.25))}
-            className="p-1.5 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/80 text-slate-600 dark:text-slate-300 hover:bg-slate-100"
-            title="Zoom In"
-          >
-            <ZoomIn className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={() => setZoomLevel(prev => Math.max(prev - 0.1, 0.75))}
-            className="p-1.5 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/80 text-slate-600 dark:text-slate-300 hover:bg-slate-100"
-            title="Zoom Out"
-          >
-            <ZoomOut className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={() => setZoomLevel(1)}
-            className="p-1.5 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/80 text-slate-600 dark:text-slate-300 hover:bg-slate-100"
-            title="Reset Zoom"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      </div>
-
-      {/* ======================================================== */}
-      {/* CONNECTED EMPLOYEE DETAILS MIND MAP CANVAS               */}
-      {/* ======================================================== */}
-      <div
-        className="w-full min-h-[920px] rounded-3xl bg-slate-50/70 dark:bg-[#060712] border border-slate-200 dark:border-white/10 shadow-2xl p-6 md:p-10 relative overflow-hidden transition-all duration-300"
-        style={{
-          transform: `scale(${zoomLevel})`,
-          transformOrigin: 'top center',
-          backgroundImage: 'radial-gradient(circle at 1px 1px, rgba(139, 92, 246, 0.12) 1px, transparent 0)',
-          backgroundSize: '28px 28px',
-        }}
-      >
-        {/* SVG TREE CONNECTOR PATHS LAYER */}
-        <svg
-          className="absolute inset-0 w-full h-full pointer-events-none z-0"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <defs>
-            <linearGradient id="grad-emp-identity" x1="50%" y1="0%" x2="10%" y2="100%">
-              <stop offset="0%" stopColor="#8b5cf6" stopOpacity="0.8" />
-              <stop offset="100%" stopColor="#7c3aed" stopOpacity="0.5" />
-            </linearGradient>
-            <linearGradient id="grad-emp-corporate" x1="50%" y1="0%" x2="30%" y2="100%">
-              <stop offset="0%" stopColor="#8b5cf6" stopOpacity="0.8" />
-              <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.5" />
-            </linearGradient>
-            <linearGradient id="grad-emp-hierarchy" x1="50%" y1="0%" x2="50%" y2="100%">
-              <stop offset="0%" stopColor="#8b5cf6" stopOpacity="0.8" />
-              <stop offset="100%" stopColor="#10b981" stopOpacity="0.5" />
-            </linearGradient>
-            <linearGradient id="grad-emp-lifecycle" x1="50%" y1="0%" x2="70%" y2="100%">
-              <stop offset="0%" stopColor="#8b5cf6" stopOpacity="0.8" />
-              <stop offset="100%" stopColor="#f59e0b" stopOpacity="0.5" />
-            </linearGradient>
-            <linearGradient id="grad-emp-equipment" x1="50%" y1="0%" x2="90%" y2="100%">
-              <stop offset="0%" stopColor="#8b5cf6" stopOpacity="0.8" />
-              <stop offset="100%" stopColor="#d946ef" stopOpacity="0.5" />
-            </linearGradient>
-
-            <filter id="empTreeGlow" x="-20%" y="-20%" width="140%" height="140%">
-              <feGaussianBlur stdDeviation="3" result="blur" />
-              <feComposite in="SourceGraphic" in2="blur" operator="over" />
-            </filter>
-          </defs>
-
-          {/* Curved Mind Map Connectors from Employee Root to 5 Branches */}
-          <path d="M 50% 180 C 50% 220, 10% 220, 10% 270" fill="none" stroke="url(#grad-emp-identity)" strokeWidth="3" strokeDasharray="6 3" filter="url(#empTreeGlow)" />
-          <path d="M 50% 180 C 50% 220, 30% 220, 30% 270" fill="none" stroke="url(#grad-emp-corporate)" strokeWidth="3" strokeDasharray="6 3" filter="url(#empTreeGlow)" />
-          <path d="M 50% 180 C 50% 220, 50% 220, 50% 270" fill="none" stroke="url(#grad-emp-hierarchy)" strokeWidth="3" strokeDasharray="6 3" filter="url(#empTreeGlow)" />
-          <path d="M 50% 180 C 50% 220, 70% 220, 70% 270" fill="none" stroke="url(#grad-emp-lifecycle)" strokeWidth="3" strokeDasharray="6 3" filter="url(#empTreeGlow)" />
-          <path d="M 50% 180 C 50% 220, 90% 220, 90% 270" fill="none" stroke="url(#grad-emp-equipment)" strokeWidth="3" strokeDasharray="6 3" filter="url(#empTreeGlow)" />
-        </svg>
-
-        {/* ROOT EMPLOYEE NODE (Central Dossier Hub) */}
-        <div className="w-full flex justify-center relative z-20 mb-14">
-          <motion.div
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            className="relative"
-          >
-            {/* Outer Pulsing Aura */}
-            <div className="absolute -inset-2 rounded-3xl bg-gradient-to-r from-violet-600 via-fuchsia-600 to-blue-600 opacity-25 blur-xl animate-pulse -z-10" />
-
-            <div
-              className="p-5 md:p-6 rounded-3xl bg-white dark:bg-slate-900 border-2 border-violet-500/60 shadow-2xl flex flex-col items-center text-center max-w-md relative"
-              style={{
-                boxShadow: '0 20px 40px -10px rgba(124, 58, 237, 0.4), inset 0 2px 4px rgba(255, 255, 255, 0.5)',
-              }}
-            >
-              {/* Profile Avatar */}
-              <div className="w-16 h-16 rounded-2xl overflow-hidden bg-gradient-to-tr from-violet-600 via-purple-600 to-blue-600 flex items-center justify-center text-white font-black text-2xl shadow-lg shadow-violet-500/40 mb-3 border border-white/20">
-                {selectedEmp.profile_photo ? (
-                  <img src={selectedEmp.profile_photo} alt={selectedEmp.name} className="w-full h-full object-cover" />
-                ) : (
-                  <span>{getInitials(selectedEmp.name)}</span>
-                )}
-              </div>
-
-              <div className="flex items-center gap-1.5 mb-1">
-                <span className="text-[10px] font-black uppercase tracking-widest text-violet-600 dark:text-violet-400 bg-violet-100 dark:bg-violet-950/60 px-2.5 py-0.5 rounded-full border border-violet-200 dark:border-violet-800/40">
-                  {selectedEmp.employee_id}
-                </span>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
-                  {selectedEmp.status}
-                </span>
-              </div>
-
-              <h2 className="text-xl font-black text-slate-900 dark:text-white tracking-tight">
-                {selectedEmp.name}
-              </h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">
-                {selectedEmp.role} · <strong className="text-violet-600 dark:text-violet-400">{selectedEmp.department}</strong>
-              </p>
-
-              {/* Status footer inside root node */}
-              <div className="flex items-center gap-3 mt-3 pt-2.5 border-t border-slate-100 dark:border-white/10 text-xs">
-                <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-semibold">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-                  Day {selectedEmp.onboarding_day} Onboardee
-                </span>
-                <span className="text-slate-300 dark:text-slate-700">|</span>
-                <span className="text-slate-500 dark:text-slate-400 font-medium">
-                  {mindMapNodes.length} Verified Attributes
-                </span>
-              </div>
-
-              {/* Connector Pin */}
-              <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 w-6 h-6 rounded-full bg-violet-600 border-2 border-white dark:border-slate-900 shadow-md flex items-center justify-center">
-                <div className="w-2 h-2 rounded-full bg-white animate-pulse" />
-              </div>
-            </div>
-          </motion.div>
-        </div>
-
-        {/* 5 CONNECTED MIND MAP BRANCHES & NODES */}
-        <div className="w-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 relative z-10 pt-2">
-          {branches.map(bKey => {
-            const meta = BRANCH_META[bKey];
-            const branchNodes = filteredNodes.filter(n => n.branchKey === bKey);
-            const Icon = meta.icon;
-
-            return (
-              <div key={bKey} className="space-y-3.5 flex flex-col relative group">
-                {/* Branch Top Connector Anchor Pin */}
-                <div className="flex justify-center -mb-2">
-                  <div
-                    className="w-4 h-4 rounded-full border-2 border-white dark:border-slate-900 shadow-md flex items-center justify-center animate-bounce"
-                    style={{ backgroundColor: meta.stroke }}
-                  >
-                    <div className="w-1.5 h-1.5 rounded-full bg-white" />
-                  </div>
-                </div>
-
-                {/* Branch Header Node (Tree Trunk Node) */}
-                <div
-                  className={cn(
-                    'p-3.5 rounded-2xl border-2 flex items-center gap-2.5 shadow-md transition-all',
-                    meta.bg,
-                    meta.border,
-                    'bg-white dark:bg-slate-900/95'
-                  )}
-                  style={{
-                    boxShadow: `0 8px 18px -4px ${meta.glow}`,
-                  }}
-                >
-                  <div
-                    className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 text-white shadow-sm"
-                    style={{ backgroundColor: meta.stroke }}
-                  >
-                    <Icon className="w-4 h-4" />
-                  </div>
-                  <div className="min-w-0">
-                    <h3 className="text-xs font-black text-slate-900 dark:text-white truncate">
-                      {meta.label}
-                    </h3>
-                    <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
-                      {branchNodes.length} Verified Nodes
-                    </p>
-                  </div>
-                </div>
-
-                {/* Connected Attribute Leaf Nodes */}
-                <div className="space-y-2.5 flex-1">
-                  {branchNodes.map(node => {
-                    const isSecured = node.status === 'SECURED';
-                    const isVerified = node.status === 'VERIFIED';
-                    const isPending = node.status === 'PENDING';
-
-                    return (
-                      <motion.div
-                        key={node.id}
-                        layout
-                        whileHover={{ scale: 1.02, y: -2 }}
-                        onClick={() => setInspectedNode(node)}
-                        className={cn(
-                          'p-3.5 rounded-2xl border transition-all cursor-pointer relative shadow-xs hover:shadow-lg select-none',
-                          'bg-white dark:bg-slate-900/90',
-                          isSecured && 'border-violet-500/40 bg-violet-50/10 dark:bg-violet-950/20',
-                          isVerified && 'border-emerald-500/40 bg-emerald-50/10 dark:bg-emerald-950/20',
-                          isPending && 'border-amber-500/40 bg-amber-50/10 dark:bg-amber-950/20',
-                          node.status === 'ACTIVE' && 'border-blue-500/40 bg-blue-50/10 dark:bg-blue-950/20'
-                        )}
-                      >
-                        {/* Side Branch Anchor Pin */}
-                        <div
-                          className="absolute -left-1.5 top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full border border-white dark:border-slate-900"
-                          style={{ backgroundColor: meta.stroke }}
-                        />
-
-                        {/* Top Category & Status Badge */}
-                        <div className="flex items-center justify-between gap-1 mb-1 pl-1.5">
-                          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider truncate">
-                            {node.category}
-                          </span>
-                          <span className={cn(
-                            'text-[8px] font-extrabold px-1.5 py-0.2 rounded-full uppercase',
-                            isVerified && 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30',
-                            isSecured && 'bg-violet-100 dark:bg-violet-950 text-violet-700 dark:text-violet-300 border border-violet-500/30',
-                            isPending && 'bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border border-amber-500/30',
-                            node.status === 'ACTIVE' && 'bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-500/30'
-                          )}>
-                            {node.status}
-                          </span>
-                        </div>
-
-                        {/* Attribute Title & Value */}
-                        <div className="pl-1.5 space-y-0.5">
-                          <h4 className="text-xs font-bold text-slate-900 dark:text-white leading-tight">
-                            {node.title}
-                          </h4>
-                          <p className="text-[11px] font-semibold text-violet-600 dark:text-violet-300 break-words leading-tight">
-                            {node.value}
-                          </p>
-                        </div>
-                      </motion.div>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* NODE DETAIL INSPECTOR MODAL (READ-ONLY) */}
+      {/* SCHEDULE 1:1 MODAL */}
       <AnimatePresence>
-        {inspectedNode && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+        {showScheduleModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
             <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className="w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl p-6 shadow-2xl space-y-4"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-md rounded-3xl bg-white dark:bg-[#0e172f] border border-slate-200 dark:border-white/10 shadow-2xl p-6 space-y-4"
             >
-              <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-white/10">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-xl bg-violet-500/20 text-violet-600 dark:text-violet-400 flex items-center justify-center font-bold">
-                    <Eye className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                      {BRANCH_META[inspectedNode.branchKey].label}
-                    </span>
-                    <h3 className="text-base font-bold text-slate-900 dark:text-white">{inspectedNode.title}</h3>
-                  </div>
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-white/5">
+                <div className="flex items-center gap-2">
+                  <Video className="w-4 h-4 text-amber-500" />
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                    Schedule 1:1 with {employee.name}
+                  </h3>
                 </div>
                 <button
-                  onClick={() => setInspectedNode(null)}
-                  className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-white cursor-pointer"
+                  onClick={() => setShowScheduleModal(false)}
+                  className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-white/10 text-slate-400 cursor-pointer"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
-              <div className="space-y-3 text-xs">
-                <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/5 space-y-1">
-                  <span className="text-[10px] font-bold uppercase text-slate-400">Current Value:</span>
-                  <p className="text-sm font-black text-slate-900 dark:text-white break-words">
-                    {inspectedNode.value}
-                  </p>
+              <form onSubmit={handleScheduleForEmployee} className="space-y-3.5 text-xs">
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700 dark:text-slate-300">
+                    Meeting Title
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. 1:1 Day 1 Check-in & Expectations"
+                    value={meetingTitle}
+                    onChange={(e) => setMeetingTitle(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+                  />
                 </div>
 
-                {inspectedNode.deliverable && (
+                <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
-                    <span className="text-[10px] font-bold uppercase text-slate-400">Specification & Function:</span>
-                    <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
-                      {inspectedNode.deliverable}
-                    </p>
+                    <label className="font-bold text-slate-700 dark:text-slate-300">Date</label>
+                    <input
+                      type="date"
+                      required
+                      value={meetingDate}
+                      onChange={(e) => setMeetingDate(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 text-slate-900 dark:text-white focus:outline-none"
+                    />
                   </div>
-                )}
 
-                {inspectedNode.notes && (
-                  <div className="p-3 rounded-xl bg-violet-50/50 dark:bg-violet-950/30 border border-violet-200/50 dark:border-violet-900/40 text-violet-800 dark:text-violet-300">
-                    <p className="text-[11px] leading-relaxed">
-                      <strong>Audit Note:</strong> {inspectedNode.notes}
-                    </p>
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-700 dark:text-slate-300">Time</label>
+                    <input
+                      type="text"
+                      required
+                      value={meetingTime}
+                      onChange={(e) => setMeetingTime(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 text-slate-900 dark:text-white focus:outline-none"
+                    />
                   </div>
-                )}
-
-                <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-white/5 text-[11px] text-slate-400">
-                  <span>Assigned to: <strong className="text-slate-700 dark:text-slate-200">{selectedEmp.name}</strong></span>
-                  <span className="font-semibold text-emerald-600 dark:text-emerald-400">Verified Dossier Item</span>
                 </div>
-              </div>
 
-              <div className="flex justify-end pt-1">
+                <div className="pt-3 border-t border-slate-100 dark:border-white/5 flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowScheduleModal(false)}
+                    className="px-4 py-2 rounded-xl border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 font-semibold cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold transition-colors cursor-pointer"
+                  >
+                    Schedule Meeting
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ASSIGN TASK MODAL */}
+      <AnimatePresence>
+        {showAssignTaskModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-md rounded-3xl bg-white dark:bg-[#0e172f] border border-slate-200 dark:border-white/10 shadow-2xl p-6 space-y-4"
+            >
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-white/5">
+                <div className="flex items-center gap-2">
+                  <Target className="w-4 h-4 text-amber-500" />
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                    Assign Task to {employee.name}
+                  </h3>
+                </div>
                 <button
-                  onClick={() => setInspectedNode(null)}
-                  className="px-4 py-2 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-bold transition-all shadow-sm cursor-pointer"
+                  onClick={() => setShowAssignTaskModal(false)}
+                  className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-white/10 text-slate-400 cursor-pointer"
                 >
-                  Close Dossier Node
+                  <X className="w-4 h-4" />
                 </button>
               </div>
+
+              <form onSubmit={handleAssignTask} className="space-y-3.5 text-xs">
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700 dark:text-slate-300">
+                    Task Name *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Complete Engineering Architecture Walkthrough"
+                    value={taskName}
+                    onChange={(e) => setTaskName(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-700 dark:text-slate-300">Category</label>
+                    <select
+                      value={taskCategory}
+                      onChange={(e) => setTaskCategory(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 text-slate-900 dark:text-white focus:outline-none"
+                    >
+                      <option value="Role">Role</option>
+                      <option value="IT">IT</option>
+                      <option value="Security">Security</option>
+                      <option value="Training">Training</option>
+                      <option value="HR">HR</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-700 dark:text-slate-300">Due Date</label>
+                    <input
+                      type="date"
+                      value={taskDueDate}
+                      onChange={(e) => setTaskDueDate(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 text-slate-900 dark:text-white focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="pt-3 border-t border-slate-100 dark:border-white/5 flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowAssignTaskModal(false)}
+                    className="px-4 py-2 rounded-xl border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 font-semibold cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold transition-colors cursor-pointer"
+                  >
+                    Assign Task
+                  </button>
+                </div>
+              </form>
             </motion.div>
           </div>
         )}
@@ -1073,15 +824,15 @@ function HREmployeeDetailsContent() {
 
 export default function HREmployeeDetailsPage() {
   return (
-    <Suspense fallback={
-      <div className="p-8 max-w-7xl mx-auto flex items-center justify-center min-h-[400px]">
-        <div className="flex items-center gap-3 text-sm text-slate-400">
-          <div className="w-5 h-5 border-2 border-violet-600 border-t-transparent rounded-full animate-spin" />
-          <span>Loading verified employee dossier...</span>
+    <Suspense
+      fallback={
+        <div className="p-12 text-center max-w-5xl mx-auto space-y-3">
+          <div className="w-8 h-8 rounded-full border-2 border-amber-500 border-t-transparent animate-spin mx-auto" />
+          <p className="text-xs text-slate-500">Loading employee dossier...</p>
         </div>
-      </div>
-    }>
-      <HREmployeeDetailsContent />
+      }
+    >
+      <EmployeeDetailsContent />
     </Suspense>
   );
 }

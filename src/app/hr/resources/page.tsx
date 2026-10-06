@@ -1,7 +1,5 @@
-'use client';
-
-import ResourcesChecklist from '@/components/resources/ResourcesChecklist';
+import { redirect } from 'next/navigation';
 
 export default function HRResourcesPage() {
-  return <ResourcesChecklist portalType="hr" />;
+  redirect('/hr/dashboard');
 }

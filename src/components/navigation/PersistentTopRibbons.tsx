@@ -2,27 +2,18 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
-import { motion, AnimatePresence } from 'framer-motion';
+import { usePathname } from 'next/navigation';
 import {
   Sun, Moon, Clock, Building, MapPin, Briefcase,
-  UserPlus, LayoutDashboard, Compass, Users,
-  CheckSquare, BookOpen, Star, HelpCircle,
-  AlertCircle, LogOut, ChevronRight, User as UserIcon, Edit3,
-  Plus, Sparkles, Activity, ShieldCheck, CheckCircle2
+  AlertCircle, LogOut, Activity
 } from 'lucide-react';
 import { useAuth, useEmployeeData } from '@/lib/context';
-import { cn, getInitials } from '@/lib/utils';
-import SecurityPasswordModal from '@/components/security/SecurityPasswordModal';
+import { getInitials } from '@/lib/utils';
 
 export default function PersistentTopRibbons() {
   const pathname = usePathname();
-  const router = useRouter();
   const { user, employee, theme, toggleTheme, logout } = useAuth();
   const { tasks } = useEmployeeData();
-
-  const [securityModalOpen, setSecurityModalOpen] = useState(false);
-  const [securityModalMode, setSecurityModalMode] = useState<'edit_profile' | 'add_user'>('edit_profile');
 
   // Real-time ticking date & clock (updates every 1000ms for live dynamic ticking seconds)
   const [now, setNow] = useState(new Date());
@@ -84,29 +75,6 @@ export default function PersistentTopRibbons() {
 
   const isHR = pathname.startsWith('/hr') || user?.role === 'hr_manager';
 
-  const navTabs = isHR ? [
-    { href: '/hr/dashboard', label: 'Mind Map Tree', icon: LayoutDashboard },
-    { href: '/hr/employees', label: 'Employee Roster', icon: Users },
-    { href: '/hr/employee-details', label: 'Employee Details', icon: UserIcon },
-    { href: '/hr/resources', label: 'Resources Checklist', icon: BookOpen },
-    { href: '/hr/dashboard?branch=journey', label: 'My Journey', icon: Compass },
-    { href: '/hr/dashboard?branch=tasks', label: 'Tasks', icon: CheckSquare },
-    { href: '/hr/dashboard?branch=experience', label: 'Experience', icon: Star },
-    { href: '/hr/dashboard?branch=support_about', label: 'Support & About', icon: HelpCircle },
-  ] : [
-    { href: '/employee/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { href: '/employee/journey', label: 'My Journey', icon: Compass },
-    { href: '/employee/tasks', label: 'Tasks', icon: CheckSquare },
-    { href: '/employee/resources', label: 'Resources', icon: BookOpen },
-    { href: '/employee/experience', label: 'My Experience', icon: Star },
-    { href: '/employee/support-about', label: 'Support & About', icon: HelpCircle },
-  ];
-
-  const handleOpenSecurity = (mode: 'edit_profile' | 'add_user') => {
-    setSecurityModalMode(mode);
-    setSecurityModalOpen(true);
-  };
-
   return (
     <>
       <header
@@ -122,36 +90,26 @@ export default function PersistentTopRibbons() {
         {/* RIBBON LEVEL 1: 3D DYNAMIC COMMAND & BRAND BAR           */}
         {/* ======================================================== */}
         <div
-          className="w-full bg-white/95 dark:bg-[#070812]/95 backdrop-blur-2xl border-b border-slate-200/90 dark:border-white/10 px-4 md:px-8 py-2 flex items-center justify-between transition-colors relative z-30 shadow-md"
+          className="w-full bg-white/95 dark:bg-[#070812]/95 backdrop-blur-2xl border-b border-slate-200/90 dark:border-white/10 px-4 md:px-8 py-2.5 flex items-center justify-between transition-colors relative z-30 shadow-md"
           style={{
             transform: 'perspective(1200px) translateZ(0)',
           }}
         >
-          {/* Left: 3D Brand Logo + Live Ticking Clock Badge */}
+          {/* Left: Genesis Logo + Brand + Live Clock */}
           <div className="flex items-center gap-3">
             <Link href="/" className="flex items-center gap-3 group">
-              <div
-                className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-violet-600 via-fuchsia-600 to-blue-600 flex items-center justify-center transition-all duration-300 group-hover:scale-105 cursor-pointer"
-                style={{
-                  transform: 'perspective(600px) rotateX(6deg) rotateY(-6deg)',
-                  boxShadow: '0 10px 22px -3px rgba(124, 58, 237, 0.5), inset 0 2px 4px rgba(255, 255, 255, 0.45)',
-                }}
-              >
-                <span className="text-white font-black text-xl tracking-tighter drop-shadow-md">G</span>
-              </div>
-              <div className="flex flex-col">
-                <span className="text-lg font-black tracking-tight bg-gradient-to-r from-violet-600 via-fuchsia-500 to-blue-600 bg-clip-text text-transparent drop-shadow-xs">
-                  GENESIS
-                </span>
-                <span className="text-[9px] uppercase font-bold tracking-widest text-slate-500 dark:text-slate-400 -mt-1">
-                  Enterprise System
-                </span>
+              <div className="relative flex items-center justify-center">
+                <img
+                  src="/branding/genesis-logo-transparent.png"
+                  alt="Genesis Logo"
+                  className="h-9 w-auto max-w-[140px] object-contain drop-shadow-md group-hover:scale-105 transition-transform"
+                />
               </div>
             </Link>
 
-            {/* Live Real-time Clock Pill with ticking seconds & 3D bevel */}
+            {/* Live Real-time Clock Pill with ticking seconds */}
             <div
-              className="hidden md:flex items-center gap-2 ml-4 px-3.5 py-1.5 rounded-full bg-slate-100 dark:bg-white/[0.06] border border-slate-300/80 dark:border-white/15 text-xs"
+              className="hidden md:flex items-center gap-2 ml-2 px-3.5 py-1.5 rounded-full bg-slate-100 dark:bg-white/[0.06] border border-slate-300/80 dark:border-white/15 text-xs"
               style={{
                 boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.1), 0 2px 6px rgba(0,0,0,0.04)',
               }}
@@ -306,82 +264,7 @@ export default function PersistentTopRibbons() {
             )}
           </div>
         </div>
-
-        {/* ======================================================== */}
-        {/* RIBBON LEVEL 3: 3D HORIZONTAL NAVIGATION & ACTION BAR    */}
-        {/* ======================================================== */}
-        <div
-          className="w-full bg-white/95 dark:bg-[#05060d]/95 border-b border-slate-200 dark:border-white/10 px-4 md:px-8 py-1.5 flex items-center justify-between gap-4 overflow-x-auto no-scrollbar transition-colors relative z-10"
-          style={{
-            boxShadow: '0 8px 24px -6px rgba(0, 0, 0, 0.2)',
-          }}
-        >
-          {/* Horizontal 3D Pill Navigation Tabs */}
-          <nav className="flex items-center gap-1.5 py-0.5">
-            {navTabs.map(tab => {
-              const Icon = tab.icon;
-              const isActive = pathname === tab.href || (tab.href !== '/employee/dashboard' && tab.href !== '/hr/dashboard' && pathname.startsWith(tab.href));
-              return (
-                <Link
-                  key={tab.label}
-                  href={tab.href}
-                  className={cn(
-                    'relative flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer z-10',
-                    isActive
-                      ? 'text-white font-extrabold shadow-md'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5'
-                  )}
-                >
-                  {isActive && (
-                    <motion.div
-                      layoutId="activeRibbonPill"
-                      className="absolute inset-0 rounded-xl bg-gradient-to-r from-violet-600 via-indigo-600 to-blue-600 border border-white/25 -z-10 shadow-lg shadow-violet-500/35"
-                      transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-                      style={{
-                        boxShadow: '0 4px 14px rgba(124, 58, 237, 0.4), inset 0 1px 0 rgba(255,255,255,0.4)',
-                      }}
-                    />
-                  )}
-                  <Icon className={cn('w-3.5 h-3.5 transition-transform', isActive ? 'text-white scale-110' : 'text-slate-400')} />
-                  <span>{tab.label}</span>
-                  {isActive && (
-                    <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                  )}
-                </Link>
-              );
-            })}
-          </nav>
-
-          {/* 3D Action Buttons: "Edit Profile" and "Add User" */}
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <button
-              onClick={() => handleOpenSecurity('edit_profile')}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 border border-slate-300 dark:border-white/15 text-slate-700 dark:text-slate-200 text-xs font-semibold transition-all cursor-pointer shadow-xs active:translate-y-0.5"
-            >
-              <Edit3 className="w-3.5 h-3.5 text-violet-600 dark:text-violet-400" />
-              <span>Edit Profile</span>
-            </button>
-
-            <button
-              onClick={() => handleOpenSecurity('add_user')}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-violet-600 to-blue-600 hover:from-violet-700 hover:to-blue-700 text-white text-xs font-bold transition-all shadow-md shadow-violet-500/25 cursor-pointer active:translate-y-0.5"
-              style={{
-                boxShadow: '0 4px 12px rgba(124, 58, 237, 0.3), inset 0 1px 0 rgba(255,255,255,0.25)',
-              }}
-            >
-              <UserPlus className="w-3.5 h-3.5 text-white" />
-              <span>Add New User</span>
-            </button>
-          </div>
-        </div>
       </header>
-
-      {/* Security Password Verification Modal */}
-      <SecurityPasswordModal
-        isOpen={securityModalOpen}
-        onClose={() => setSecurityModalOpen(false)}
-        mode={securityModalMode}
-      />
     </>
   );
 }

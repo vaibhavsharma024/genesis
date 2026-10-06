@@ -9,40 +9,51 @@
     --genesis-purple: 139 92 246;
     --genesis-blue: 59 130 246;
     --genesis-emerald: 16 185 129;
-    --genesis-amber: 245 158 11;
+    --genesis-amber: 217 119 6;
+    --genesis-gold: 245 158 11;
     --genesis-rose: 244 63 94;
 
-    /* Light mode */
-    --bg-primary: 255 255 255;
+    /* Light mode: Dusty Blue background, Off-White cards, Navy text */
+    --bg-primary: 240 244 249;
     --bg-secondary: 248 250 252;
-    --bg-tertiary: 241 245 249;
+    --bg-tertiary: 233 240 248;
     --bg-card: 255 255 255;
-    --bg-overlay: 0 0 0 / 0.5;
-    --border: 226 232 240;
+    --bg-overlay: 15 23 42 / 0.45;
+    --border: 203 213 225;
     --text-primary: 15 23 42;
     --text-secondary: 71 85 105;
-    --text-muted: 148 163 184;
+    --text-muted: 100 116 139;
 
-    --theme-bg: #f8fafc;
+    --theme-bg: #edf3f8;
     --theme-card: #ffffff;
+    --theme-card-subtle: #f8fafc;
     --theme-text: #0f172a;
-    --theme-border: #e2e8f0;
+    --theme-text-muted: #475569;
+    --theme-border: #cbd5e1;
+    --theme-accent: #2563eb;
+    --theme-gold: #d97706;
   }
 
   .dark {
-    --bg-primary: 9 9 11;
-    --bg-secondary: 17 17 24;
-    --bg-tertiary: 24 24 37;
-    --bg-card: 17 17 24;
-    --border: 39 39 58;
+    /* Dark mode: Deep Navy Blue background, Rich Navy surfaces, Rich Gold accents */
+    --bg-primary: 8 13 26;
+    --bg-secondary: 13 22 43;
+    --bg-tertiary: 18 30 58;
+    --bg-card: 13 22 43;
+    --border: 30 45 80;
     --text-primary: 248 250 252;
     --text-secondary: 148 163 184;
-    --text-muted: 71 85 105;
+    --text-muted: 100 116 139;
 
-    --theme-bg: #050508;
-    --theme-card: #0c0d14;
+    --theme-bg: #080d1a;
+    --theme-card: #0e172f;
+    --theme-card-subtle: #121d3b;
     --theme-text: #f8fafc;
-    --theme-border: rgba(255, 255, 255, 0.08);
+    --theme-text-muted: #94a3b8;
+    --theme-border: rgba(245, 158, 11, 0.22);
+    --theme-border-subtle: rgba(255, 255, 255, 0.08);
+    --theme-accent: #3b82f6;
+    --theme-gold: #f59e0b;
   }
 
   * {
